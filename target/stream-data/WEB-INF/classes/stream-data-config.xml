@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:p="http://www.springframework.org/schema/p"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mongo="http://www.springframework.org/schema/data/mongo" 
+	xmlns:jms="http://www.springframework.org/schema/jms" 
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-3.0.xsd 
+	                    http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd 
+	                    http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task-3.0.xsd
+	                    http://www.springframework.org/schema/jms http://www.springframework.org/schema/jms/spring-jms-3.0.xsd
+	                    http://www.springframework.org/schema/data/mongo 
+          				http://www.springframework.org/schema/data/mongo/spring-mongo-1.0.xsd">
+
+	<context:property-placeholder location="classpath:stream-data.properties" />
+	
+	
+	<mongo:mongo host="localhost" port="27017" />
+	<mongo:db-factory dbname="stream-data" mongo-ref="mongo" /> 
+	
+	<bean id="mongo-connection" class="org.springframework.data.mongodb.core.MongoTemplate">
+		<constructor-arg name="mongoDbFactory" ref="mongoDbFactory"/>
+	</bean>
+	
+	
+	<bean id="generic" class="cl.magno.concentrador.dao.GenericDAO" >
+		<property name="connection" ref="mongo-connection"></property>
+	</bean>
+	
+	<bean id="configuration" class="cl.magno.concentrador.streamdata.core.util.AppConfig" >
+		
+		<property name="data">
+			<map>
+				<entry key="pathCertificado" 				value="${concentrador.variables.certificado}"/>
+				<entry key="delimitadorCSV" 				value="${concentrador.variables.delimitadorCSV}"/>
+				<entry key="archivoFecha" 					value="${concentrador.variables.archivoFecha}"/>
+				<entry key="pathBandejaLeidos" 				value="${concentrador.variables.pathBandejaLeidos}"/>
+				<entry key="templateReport" 				value="${concentrador.variables.templateReport}"/>
+				<entry key="tempDir" 						value="${concentrador.variables.tempDir}"/>
+				<entry key="timeToLive" 					value="${concentrador.variables.timeToLive}"/>
+				
+				<entry key="asyncMaxRegistros" 				value="${concentrador.variables.asyncMaxRegistros}"/>
+				<entry key="asyncMaxListeners" 				value="${concentrador.variables.asyncMaxListeners}"/>
+				<entry key="asyncMaxThreadsMapping" 		value="${concentrador.variables.asyncMaxThreadsMapping}"/>
+				<entry key="asyncMaxThreadsDB" 				value="${concentrador.variables.asyncMaxThreadsDB}"/>
+				<entry key="asyncStreamProcess" 			value="${concentrador.variables.asyncStreamProcess}"/>
+				
+				<entry key="nombreMensajeInterfazGenerica" 	value="${concentrador.variables.nombreMensajeInterfazGenerica}"/>
+				
+				<entry key="idCliente" 						value="${concentrador.variables.id_cliente}"/>
+				<entry key="spMsgUpdate" 					value="${concentrador.variables.spMsgUpdate}"/>
+				<entry key="tipoAlerta" 					value="${concentrador.variables.tipo_alerta}"/>
+				<entry key="fechaProceso" 					value="${concentrador.variables.fecha_proceso}"/>
+				<entry key="numeroProducto"					value="${concentrador.variables.numero_producto}"/>
+				
+			</map>
+		</property>
+	</bean>
+	
+	<bean id="jndiTemplate" class="org.springframework.jndi.JndiTemplate">
+		<property name="environment">
+			<props>
+				<prop key="java.naming.factory.initial">${concentrador.intjms.initialContext}</prop>
+				<prop key="java.naming.provider.url">${concentrador.intjms.provider}</prop>
+				<prop key="java.naming.factory.url.pkgs">${concentrador.intjms.pgks}</prop>
+			</props>
+		</property>
+	</bean>  
+	 
+	<bean id="queueExtractCtdr" class="org.springframework.jndi.JndiObjectFactoryBean">
+		<property name="jndiTemplate">
+			<ref bean="jndiTemplate" />
+		</property>
+		<property name="jndiName">
+			<value>jms/queueExtractCtdr</value>
+		</property>
+		
+	</bean>
+
+	<bean id="queueMappingCtdr" class="org.springframework.jndi.JndiObjectFactoryBean">
+		<property name="jndiTemplate">
+			<ref bean="jndiTemplate" />
+		</property>
+		<property name="jndiName">
+			<value>jms/queueMappingCtdr</value>
+		</property>
+	</bean> 
+		 
+	<bean id="queueConnectionFactory" class="org.springframework.jndi.JndiObjectFactoryBean">
+		<property name="jndiTemplate">
+			<ref bean="jndiTemplate" />
+		</property>
+		<property name="jndiName">
+			<value>${concentrador.intjms.cf}</value>
+		</property>
+	</bean> 
+	
+	<bean id="topicNotification" class="org.springframework.jndi.JndiObjectFactoryBean">
+		<property name="jndiTemplate">
+			<ref bean="jndiTemplate" />
+		</property>
+		<property name="jndiName">
+			<value>jms/topicNotification</value>
+		</property>
+	</bean>
+
+	<bean id="jmsExtractTemplate" class="org.springframework.jms.core.JmsTemplate" scope="prototype">
+	    <property name="connectionFactory" ref="queueConnectionFactory" /> 
+	    <property name="defaultDestination" ref="queueExtractCtdr" />
+	    <property name="sessionAcknowledgeModeName" value="AUTO_ACKNOWLEDGE"/>
+	    <property name="sessionTransacted" value="false" />
+	    <property name="explicitQosEnabled" value="true" />
+	    <property name="timeToLive" value="14400000" />
+	</bean>
+	
+	<bean id="jmsMappingTemplate" class="org.springframework.jms.core.JmsTemplate" scope="prototype">
+	    <property name="connectionFactory" ref="queueConnectionFactory" /> 
+	    <property name="defaultDestination" ref="queueMappingCtdr" />
+	    <property name="sessionAcknowledgeModeName" value="AUTO_ACKNOWLEDGE"/>
+	    <property name="sessionTransacted" value="false" />
+	    <property name="explicitQosEnabled" value="true" />
+	    <property name="timeToLive" value="14400000" />
+	</bean>
+	
+	
+	<bean id="jmsNotifyTemplate" class="org.springframework.jms.core.JmsTemplate" scope="prototype">
+	    <property name="connectionFactory" ref="queueConnectionFactory" /> 
+	    <property name="defaultDestination" ref="topicNotification" />
+	    <property name="sessionAcknowledgeModeName" value="AUTO_ACKNOWLEDGE"/>
+	    <property name="sessionTransacted" value="false" />
+	    <property name="explicitQosEnabled" value="true" />
+	    <property name="timeToLive" value="14400000" />
+	</bean>
+	
+	
+	
+	
+	
+</beans>
